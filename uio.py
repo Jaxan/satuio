@@ -11,6 +11,7 @@ solver_name = 'g3'
 verbose = True
 
 start = time.time()
+start_total = start
 def measure_time(*str):
   global start
   now = time.time()
@@ -18,13 +19,14 @@ def measure_time(*str):
   start = now
 
 
-# *********************
-# Reading the automaton
-# *********************
+# *****************
+# Reading the input
+# *****************
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
 parser.add_argument('length', help="Length of the uio", type=int)
+parser.add_argument('-v', '--verbose', help="Show more output", action="store_true")
 args = parser.parse_args()
 
 length = args.length
@@ -32,7 +34,7 @@ length = args.length
 alphabet = set()
 outputs = set()
 states = set()
-bases = set(['s0', 's4', 's37', 's555'])
+# bases = set(['s0', 's1', 's2', 's3', 's4', 's5', 's37', 's555'])
 
 delta = {}
 labda = {}
@@ -55,6 +57,8 @@ with open(args.filename) as file:
 
       delta[(s, i)] = t
       labda[(s, i)] = o
+
+bases = states
 
 measure_time('Constructed automaton with', len(states), 'states and', len(alphabet), 'symbols')
 
@@ -124,7 +128,7 @@ unique([bvar(base) for base in bases])
 # and we also record the outputs along this path. The output are later
 # used to decide whether we found a different output.
 possible_outputs = {}
-for s in tqdm(states, desc="CNF construction"):
+for s in tqdm(states, desc="CNF paths"):
   # current set of possible states we're in
   current_set = set([s])
   # set of successors for the next iteration of i
@@ -174,7 +178,7 @@ for s in tqdm(states, desc="CNF construction"):
 # If(f) the output of a state is different than the one from our base state,
 # then, we encode that in a new variable. This is only needed when the base
 # state is active, so the first literal in these clauses is -bvar(base).
-for s in tqdm(states, desc="difference"):
+for s in tqdm(states, desc="CNF diffs"):
   # Constraint: there is a place, such that there is a difference in output
   # \/_i x_('e', s, i)
   # If s is our base, we don't care
@@ -214,10 +218,13 @@ measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver
 console = Console(markup=False, highlight=False)
 max_state_length = max([len(str) for str in states])
 
+num_uios = {True: 0, False: 0}
+
 for base in bases:
   console.print('')
   console.print('*** UIO for state', base, style='bold blue')
   b = solver.solve(assumptions=[bvar(base)])
+  num_uios[b] = num_uios[b] + 1
   measure_time('Solver finished')
 
   if b:
@@ -237,10 +244,10 @@ for base in bases:
     # For each state, we print the paths and output.
     # We mark the differences red (there can be differences not
     # marked, these are the differences decided in the solving).
-    if verbose:
+    if args.verbose:
       console.print('! paths')
       for s in states:
-        console.print(s.rjust(max_state_length, ' '), '=>', end=' ')
+        console.print(s.rjust(max_state_length, ' '), ' ==> ', end=' ')
         for i in range(length):
           for t in states:
             if svar(s, i, t) in truth:
@@ -254,7 +261,7 @@ for base in bases:
               elif evar(s, i) in truth:
                 style = 'bold red'
               
-              console.print(o, end=', ', style=style)
+              console.print(o, end=',  ', style=style)
         console.print('')
 
   else:
@@ -262,3 +269,9 @@ for base in bases:
     core = solver.get_core()
     # The core returned by the solver is not interesting:
     # It is only the assumption (i.e. bvar).
+
+start = start_total
+print('')
+measure_time("Done with total time")
+print('With UIO:', num_uios[True])
+print('without: ', num_uios[False])
