@@ -16,7 +16,9 @@ def measure_time(*str):
   start = now
 
 
-# Automaton
+# *********************
+# Reading the automaton
+# *********************
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
@@ -55,7 +57,9 @@ with open(args.filename) as file:
 measure_time('Constructed automaton with', len(states), 'states and', len(alphabet), 'symbols')
 
 
-# Solver setup
+# ********************
+# Seting up the solver
+# ********************
 
 vpool = IDPool()
 solver = Solver(name=solver_name)
@@ -101,7 +105,9 @@ def unique(lits):
 measure_time('Setup solver')
 
 
-# Construction
+# ********************
+# Constructing the CNF
+# ********************
 
 # Guessing the word:
 # variable x_('in', i, a) says: on place i there is an input a
@@ -111,39 +117,55 @@ for i in range(length):
 # We should only enable one base state (this allows for an optimisation later)
 unique([bvar(base) for base in bases])
 
-for s in tqdm(states, desc="simple stuff"):
-  for i in range(length):
-    # variable x_('out', s, i, a) says: on place i there is an output o of the path s
-    unique([ovar(s, i, o) for o in outputs])
+# For each state s, we construct a path of possible successor states,
+# following the guessed word. This path should be consistent with delta,
+# and we also record the outputs along this path. The output are later
+# used to decide whether we found a different output.
+for s in tqdm(states, desc="CNF construction"):
+  # current set of possible states we're in
+  current_set = set([s])
+  # set of successors for the next iteration of i
+  next_set = set()
 
-    if i == 0:
-      # The paths start in the corresponding state
-      # This could be used to reduce some variables, but I'm lazy now
-      solver.add_clause([svar(s, 0, s)])
-    else:
-      # variable x_('state', s, i, t) denotes the path through the automaton starting in s
-      unique([svar(s, i, t) for t in states])
-
-# The path is consistent with the delta function
-# The outputs correspond to the output along the path
-# I have merged these loops, it was slightly faster
-for s in tqdm(states, desc="paths & outputs"):
   for i in range(length):
-    for t in states:
-      sv = svar(s, i, t)
-      for a in alphabet:
-        av = avar(i, a)
-        # We couple i with i+1, and so skip the last iteration
-        if i < length-1:
-          # x_('s', s, i, t) /\ x_('in', i, a) => x_('s', s, i+1, delta(t, a))
-          # == -x_('s', s, i, t) \/ -x_('in', i, a) \/ x_('s', s, i+1, delta(t, a))
-          next_t = delta[(t, a)]
-          solver.add_clause([-sv, -av, svar(s, i+1, next_t)])
-        
+    # Only one successor state should be enable (probably redundant)
+    # For i == 0, this is a single state (namely s)
+    unique([svar(s, i, t) for t in current_set])
+
+    # We keep track of the possible outputs
+    possible_outputs = set()
+
+    for a in alphabet:
+      av = avar(i, a)
+
+      for t in current_set:
+        sv = svar(s, i, t)
+        output = labda[(t, a)]
+        possible_outputs.add(output)
+
+        # Constraint: when in state t and input a, we output o
         # x_('s', state, i, t) /\ x_('in', i, a) => x_('o', i, labda(t, a))
         # == -x_('s', state, i, t) \/ -x_('in', i, a) \/ x_('o', i, labda(t, a))
-        output = labda[(t, a)]
         solver.add_clause([-sv, -av, ovar(s, i, output)])
+
+        # when i == length-1 we don't need to consider successors
+        if i < length-1:
+          next_t = delta[(t, a)]
+          next_set.add(next_t)
+
+          # Constraint: when in state t and input a, we go to next_t
+          # x_('s', s, i, t) /\ x_('in', i, a) => x_('s', s, i+1, delta(t, a))
+          # == -x_('s', s, i, t) \/ -x_('in', i, a) \/ x_('s', s, i+1, delta(t, a))
+          solver.add_clause([-sv, -av, svar(s, i+1, next_t)])
+    
+    # Only one output should be enabled
+    # variable x_('out', s, i, a) says: on place i there is an output o of the path s
+    unique([ovar(s, i, o) for o in possible_outputs])
+
+    # Next iteration with successor states
+    current_set = next_set
+    next_set = set()
+
 
 # If(f) the output of a state is different than the one from our base state,
 # then, we encode that in a new variable. This is only needed when the base
@@ -177,7 +199,9 @@ for s in tqdm(states, desc="diff2"):
 measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver.nof_vars(), 'variables')
 
 
-# Solving
+# ******************
+# Solving and output
+# ******************
 
 for s in bases:
   print('*** UIO for state', s)
