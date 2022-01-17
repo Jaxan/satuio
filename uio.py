@@ -1,9 +1,11 @@
+# Import the solvers and utilities
 from pysat.solvers import Solver
 from pysat.formula import IDPool
 from pysat.card import CardEnc, EncType
-import time
-import argparse
-from tqdm import tqdm
+import time                         # Time for rough timing measurements
+import argparse                     # Command line options
+from tqdm import tqdm               # Import fancy progress bars
+from rich.console import Console    # Import colorized output
 
 solver_name = 'g3'
 verbose = True
@@ -121,6 +123,7 @@ unique([bvar(base) for base in bases])
 # following the guessed word. This path should be consistent with delta,
 # and we also record the outputs along this path. The output are later
 # used to decide whether we found a different output.
+possible_outputs = {}
 for s in tqdm(states, desc="CNF construction"):
   # current set of possible states we're in
   current_set = set([s])
@@ -133,15 +136,16 @@ for s in tqdm(states, desc="CNF construction"):
     unique([svar(s, i, t) for t in current_set])
 
     # We keep track of the possible outputs
-    possible_outputs = set()
+    possible_outputs[(s, i)] = set()
 
-    for a in alphabet:
-      av = avar(i, a)
+    for t in current_set:
+      sv = svar(s, i, t)
 
-      for t in current_set:
-        sv = svar(s, i, t)
+      for a in alphabet:
+        av = avar(i, a)
+
         output = labda[(t, a)]
-        possible_outputs.add(output)
+        possible_outputs[(s, i)].add(output)
 
         # Constraint: when in state t and input a, we output o
         # x_('s', state, i, t) /\ x_('in', i, a) => x_('o', i, labda(t, a))
@@ -160,7 +164,7 @@ for s in tqdm(states, desc="CNF construction"):
     
     # Only one output should be enabled
     # variable x_('out', s, i, a) says: on place i there is an output o of the path s
-    unique([ovar(s, i, o) for o in possible_outputs])
+    unique([ovar(s, i, o) for o in possible_outputs[(s, i)]])
 
     # Next iteration with successor states
     current_set = next_set
@@ -170,31 +174,35 @@ for s in tqdm(states, desc="CNF construction"):
 # If(f) the output of a state is different than the one from our base state,
 # then, we encode that in a new variable. This is only needed when the base
 # state is active, so the first literal in these clauses is -bvar(base).
-for s in tqdm(states, desc="diff1"):
-  for base in bases:
-    if s == base:
-      continue
-    bv = bvar(base)
-    for i in range(length):
-      for o in outputs:
-        # x_('o', state, i, o) /\ -x_('o', s, i, o) => x_('e', s, i)
-        # == -x_('o', state, i, o) \/ x_('o', s, i, o) \/ -x_('e', s, i)
-        solver.add_clause([-bv, -ovar(base, i, o), ovar(s, i, o), evar(s, i)])
-
-        # We also need the other direction, we can do this:
-        # x_('e', s, i) /\ x_('o', state, i, o) => -x_('o', s, i, o)
-        # == -x_('e', s, i) \/ -x_('o', state, i, o) \/ -x_('o', s, i, o)
-        solver.add_clause([-bv, -evar(s, i), -ovar(base, i, o), -ovar(s, i, o)])
-
-# Now we have to say that the other state have some different output on their path
-for s in tqdm(states, desc="diff2"):
-  # constraint: there is a place, such that there is a difference in output
+for s in tqdm(states, desc="difference"):
+  # Constraint: there is a place, such that there is a difference in output
   # \/_i x_('e', s, i)
   # If s is our base, we don't care
   if s in bases:
     solver.add_clause([bvar(s)] + [evar(s, i) for i in range(length)])
   else:
     solver.add_clause([evar(s, i) for i in range(length)])
+
+  # Now we actually encode when the difference occurs
+  for base in bases:
+    if s == base:
+      continue
+
+    bv = bvar(base)
+
+    for i in range(length):
+      outputs_base = possible_outputs[(base, i)]
+      outputs_s = possible_outputs[(s, i)]
+
+      # We encode, if the base is enabled and there is a difference,
+      # then the outputs should actually differ. (We do not have to
+      # encode the other implication!)
+      # x_('b', base) /\ x_('e', s, i) /\ x_('o', base, i, o) => -x_('o', s, i, o)
+      # Note: when o is not possible for state s, then the clause already holds
+      for o in outputs_base:
+        if o in outputs_s:
+          solver.add_clause([-bv, -evar(s, i), -ovar(base, i, o), -ovar(s, i, o)])
+
 
 measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver.nof_vars(), 'variables')
 
@@ -203,9 +211,13 @@ measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver
 # Solving and output
 # ******************
 
-for s in bases:
-  print('*** UIO for state', s)
-  b = solver.solve(assumptions=[bvar(s)])
+console = Console(markup=False, highlight=False)
+max_state_length = max([len(str) for str in states])
+
+for base in bases:
+  console.print('')
+  console.print('*** UIO for state', base, style='bold blue')
+  b = solver.solve(assumptions=[bvar(base)])
   measure_time('Solver finished')
 
   if b:
@@ -215,45 +227,38 @@ for s in bases:
       if l > 0:
         truth.add(l)
     
-    print('! word')
+    console.print('! UIO of length', length, style='bold green')
     for i in range(length):
       for a in alphabet:
         if avar(i, a) in truth:
-          print(a, end=' ')
-    print('')
+          console.print(a, end=' ', style='bold')
+    console.print('')
 
+    # For each state, we print the paths and output.
+    # We mark the differences red (there can be differences not
+    # marked, these are the differences decided in the solving).
     if verbose:
-      print('! paths')
+      console.print('! paths')
       for s in states:
-        print(s, '=>', end=' ')
+        console.print(s.rjust(max_state_length, ' '), '=>', end=' ')
         for i in range(length):
           for t in states:
             if svar(s, i, t) in truth:
-              print(t, end=' ')
-        print('')
-      
-      print('! outputs')
-      for s in states:
-        print(s, '=>', end=' ')
-        for i in range(length):
-          for o in outputs:
-            if ovar(s, i, o) in truth:
-              print(o, end=' ')
-        print('')
+              console.print(t, end=' ')
 
-      print('! differences')
-      for s in states:
-        if s == base:
-          continue
-        print(s, '=>', end=' ')
-        for i in range(length):
-          if evar(s, i) in truth:
-            print('x', end='')
-          else:
-            print('.', end='')
-        print('')
+          for o in possible_outputs[(s, i)]:
+            if ovar(s, i, o) in truth:
+              style = ''
+              if s == base:
+                style = 'bold green'
+              elif evar(s, i) in truth:
+                style = 'bold red'
+              
+              console.print(o, end=', ', style=style)
+        console.print('')
 
   else:
-    print('! no word')
+    console.print('! no UIO of length', length, style='bold red')
     core = solver.get_core()
-    print(core)
+    # The core returned by the solver is not interesting:
+    # It is only the assumption (i.e. bvar).
