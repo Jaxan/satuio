@@ -238,7 +238,7 @@ for base in bases:
     for i in range(length):
       for a in alphabet:
         if avar(i, a) in truth:
-          console.print(a, end=' ', style='bold')
+          console.print(a, end=' ', style='bold green')
     console.print('')
 
     # For each state, we print the paths and output.

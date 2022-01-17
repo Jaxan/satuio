@@ -11,6 +11,7 @@ installed with `pip`.
 
 * pysat
 * tqdm
+* rich
 
 
 ## Usage
