@@ -10,7 +10,6 @@ returns UNSAT. For the usage, please run
 © Joshua Moerman, Open Universiteit, 2022
 """
 
-
 # Import the solvers and utilities
 from pysat.solvers import Solver
 from pysat.formula import IDPool
@@ -20,6 +19,8 @@ from argparse import ArgumentParser # Command line options
 from rich.console import Console    # Import colorized output
 from time import time               # Time for rough timing measurements
 from tqdm import tqdm               # Import fancy progress bars
+
+from parser import read_machine
 
 # function for some time logging
 start = time()
@@ -38,37 +39,14 @@ def measure_time(*str):
 # command line options
 parser = ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
-parser.add_argument('length', help='Length of the uio', type=int)
+parser.add_argument('length', help='Length of the UIO', type=int)
 parser.add_argument('-v', '--verbose', help="Show more output", action='store_true')
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--bases', help='For which states to compute an UIO (leave empty for all states)', nargs='*')
 args = parser.parse_args()
 
-# reading the automaton with a hacky .dot parser
-alphabet = set()
-outputs = set()
-states = set()
-
-delta = {}
-labda = {}
-
-with open(args.filename) as file:
-  for line in file.readlines():
-    asdf = line.split()
-    if len(asdf) > 3 and asdf[1] == '->':
-      s = asdf[0]
-      t = asdf[2]
-      rest = ''.join(asdf[3:])
-      label = rest.split('"')[1]
-      [i, o] = label.split('/')
-
-      states.add(s)
-      states.add(t)
-      alphabet.add(i)
-      outputs.add(o)
-
-      delta[(s, i)] = t
-      labda[(s, i)] = o
+# reading the automaton
+(alphabet, outputs, states, delta, labda) = read_machine(args.filename)
 
 # if the base states are not specified, take all
 if args.bases == None:
@@ -163,8 +141,8 @@ for s in tqdm(states, desc="CNF paths"):
   next_set = set()
 
   for i in range(length):
-    # Only one successor state should be enabled (this clause is
-    # probably redundant). For i == 0, this is a single state (s).
+    # Only one successor state should be enabled.
+    # For i == 0, this is a single state (s).
     unique([svar(s, i, t) for t in current_set])
 
     # We keep track of the possible outputs
