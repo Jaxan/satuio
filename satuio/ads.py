@@ -41,6 +41,7 @@ parser = ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
 parser.add_argument('length', help='Length of the ADS', type=int)
 parser.add_argument('-v', '--verbose', help="Show more output", action='store_true')
+parser.add_argument('--show-differences', help="Show even more output", action='store_true')
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--states', help='For which states to compute an ADS', nargs='+')
 args = parser.parse_args()
@@ -163,6 +164,8 @@ for s in tqdm(states, desc="CNF paths"):
     next_set = set()
 
 
+# Now we will encode differences in outputs (and equal inputs, as
+# long as there is no difference).
 for s in tqdm(states, desc="CNF diffs"):
   for t in states:
     # We skip s == t, since those state are equivalent.
@@ -243,7 +246,7 @@ if solution:
 
   console.print('! words:')
   for s in states:
-    console.print('for', s, end=': ', style='bold black')
+    console.print(s.rjust(max_state_length, ' '), end=': ', style='bold black')
 
     # We print the word
     for i in range(length):
@@ -258,7 +261,7 @@ if solution:
   if args.verbose:
     console.print('! paths')
     for s in states:
-      console.print(s.rjust(max_state_length, ' '), ' ==> ', end=' ', style='bold black')
+      console.print(s.rjust(max_state_length, ' '), end=': ', style='bold black')
       for i in range(length):
         for t in all_states:
           if svar(s, i, t) in truth:
@@ -274,6 +277,7 @@ if solution:
 
       console.print('')
 
+  if args.show_differences:
     console.print('! differences')
     for s in states:
       for t in states:
@@ -300,3 +304,10 @@ else:
 start = start_total
 print('')
 measure_time("Done with total time")
+
+# TODO: we know that dvar(s, t, i) is an equivalence relation for
+# each i. Do we help the solver when asserting that? Or will that
+# make the solving slower?
+
+# TODO: prune the tree in the end. (Some states will have shorter
+# words than others.)
