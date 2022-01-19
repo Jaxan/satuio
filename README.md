@@ -22,6 +22,9 @@ flags and options are subject to change, since this is WIP.
 ```bash
 # Finding UIO sequences in a Mealy machine
 python3 satuio/uio.py --help
+
+# Finding an ADS in a Mealy machine for a set of states
+python3 satuio/ads.py --help
 ```
 
 The solver can be specified (as long as pysat supports it). The default is
