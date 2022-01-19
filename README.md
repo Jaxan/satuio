@@ -6,26 +6,29 @@ Using SAT solvers to construct UIOs and ADSs for Mealy machines.
 
 ## Dependencies
 
-This project uses Python. It uses the following packages which can be
+This project uses Python3. It uses the following packages which can be
 installed with `pip`.
 
-* pysat
-* tqdm
-* rich
+* [`pysat`](https://github.com/pysathq/pysat)
+* [`tqdm`](https://github.com/tqdm/tqdm)
+* [`rich`](https://github.com/Textualize/rich/)
 
 
 ## Usage
 
-(Note: this project is still WIP and the commands will change.)
+All scripts show their usage with the `--help` flag. Note that the
+flags and options are subject to change, since this is WIP.
 
 ```bash
-#              <file>        <length>
-python3 uio.py examples/esm-0.dot 3
+# Finding UIO sequences in a Mealy machine
+python3 satuio/uio.py --help
 ```
+
+The solver can be specified (as long as pysat supports it). The default is
+[Glucose3](https://www.labri.fr/perso/lsimon/glucose/), as that worked
+well on the examples.
 
 
 ## Copyright
 
-© Joshua Moerman, Open Universiteit
-
-
+© Joshua Moerman, Open Universiteit, 2022

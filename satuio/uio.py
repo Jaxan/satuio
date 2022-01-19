@@ -1,19 +1,32 @@
+"""
+Script for finding UIO sequences in a Mealy machine. Uses SAT solvers
+(in pysat) to search efficiently. The length of the sequence is fixed,
+but you can specify multiple (or all) states for which an UIO is
+desired. When an UIO (of specified length) does not exist, the solver
+returns UNSAT. For the usage, please run
+  
+  python3 uio.py --help
+
+© Joshua Moerman, Open Universiteit, 2022
+"""
+
+
 # Import the solvers and utilities
 from pysat.solvers import Solver
 from pysat.formula import IDPool
 from pysat.card import CardEnc, EncType
-import time                         # Time for rough timing measurements
-import argparse                     # Command line options
-from tqdm import tqdm               # Import fancy progress bars
+
+from argparse import ArgumentParser # Command line options
 from rich.console import Console    # Import colorized output
+from time import time               # Time for rough timing measurements
+from tqdm import tqdm               # Import fancy progress bars
 
-solver_name = 'g3'
-
-start = time.time()
+# function for some time logging
+start = time()
 start_total = start
 def measure_time(*str):
   global start
-  now = time.time()
+  now = time()
   print('***', *str, "in %.3f seconds" % (now - start))
   start = now
 
@@ -23,25 +36,22 @@ def measure_time(*str):
 # *****************
 
 # command line options
-# TODO: find a way to read the base states
-parser = argparse.ArgumentParser()
+parser = ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
-parser.add_argument('length', help="Length of the uio", type=int)
-parser.add_argument('-v', '--verbose', help="Show more output", action="store_true")
-parser.add_argument('--solver', help="Which solver to use (default g3)", default='g3')
+parser.add_argument('length', help='Length of the uio', type=int)
+parser.add_argument('-v', '--verbose', help="Show more output", action='store_true')
+parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
+parser.add_argument('--bases', help='For which states to compute an UIO (leave empty for all states)', nargs='*')
 args = parser.parse_args()
 
-length = args.length
-
+# reading the automaton with a hacky .dot parser
 alphabet = set()
 outputs = set()
 states = set()
-# bases = set(['s0', 's1', 's2', 's3', 's4', 's5', 's37', 's555'])
 
 delta = {}
 labda = {}
 
-# Quick and dirty .dot parser
 with open(args.filename) as file:
   for line in file.readlines():
     asdf = line.split()
@@ -60,7 +70,13 @@ with open(args.filename) as file:
       delta[(s, i)] = t
       labda[(s, i)] = o
 
-bases = states
+# if the base states are not specified, take all
+if args.bases == None:
+  bases = states
+else:
+  bases = args.bases
+
+length = args.length
 
 measure_time('Constructed automaton with', len(states), 'states and', len(alphabet), 'symbols')
 
