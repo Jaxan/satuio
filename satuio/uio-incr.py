@@ -161,8 +161,9 @@ def extend(new_uios):
     # And follow the graph to extend to other states.
     # Note: these may not be the smallest UIO for that state.
     # But it is an UIO nevertheless.
-    for (s, i) in uio_implication_graph[t]:
-      queue.append((s, [i] + uio))
+    if t in uio_implication_graph:
+      for (s, i) in uio_implication_graph[t]:
+        queue.append((s, [i] + uio))
 
 # We extend our 1-letter UIOs
 extend(new_uios)
@@ -377,12 +378,12 @@ for length in range(2, bound + 1):
     new_uios = {}
 
 
+for (s, uio) in uios.items():
+  console.print(s, style='bold black', end=' => ')
+  console.print(uio, style='bold green')
+
 # Report some final stats
 start = start_total
 measure_time("Done with total time")
 print('With UIO:', len(uios))
 print('without: ', len(states) - len(uios))
-
-for (s, uio) in uios.items():
-  console.print(s, style='bold black', end=' => ')
-  console.print(uio, style='bold green')
