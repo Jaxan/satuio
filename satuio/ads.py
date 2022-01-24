@@ -119,6 +119,7 @@ measure_time('Setup solver', args.solver)
 # and we also record the outputs along this path. The outputs are later
 # used to decide whether we found a different output.
 possible_outputs = {}
+possible_states = {}
 for s in tqdm(states, desc="CNF paths"):
   # current set of possible states we're in
   current_set = set([s])
@@ -133,8 +134,9 @@ for s in tqdm(states, desc="CNF paths"):
     # For i == 0, this is a single state (s).
     unique([svar(s, i, t) for t in current_set])
 
-    # We keep track of the possible outputs
+    # We keep track of the possible outputs and states
     possible_outputs[(s, i)] = set()
+    possible_states[(s, i)] = current_set
 
     for t in current_set:
       for a in alphabet:
@@ -263,7 +265,7 @@ if solution:
     for s in states:
       console.print(s.rjust(max_state_length, ' '), end=': ', style='bold black')
       for i in range(length):
-        for t in all_states:
+        for t in possible_states[(s, i)]:
           if svar(s, i, t) in truth:
             console.print(t, end=' ', style='blue')
 
