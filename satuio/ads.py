@@ -211,6 +211,16 @@ for s in tqdm(states, desc="CNF diffs"):
           # We do one direction -d2var(s, t, i-1) /\ avar(s, i, a) => avar(t, i, a)
           solver.add_clause([d2var(s, t, i-1), -avar(s, i, a), avar(t, i, a)])
 
+      # Also, if there is no difference yet, the successor states must
+      # be different. (If they collapse, no difference can ever occur.)
+      # This is not strictly necessary as a clause, but it makes the
+      # solving much faster.
+      # -d2var(s, t, i-1) /\ svar(s, i, s2) => -svar(t, i, s2)
+      if i > 0:
+        for s2 in possible_states[(s, i)]:
+          if s2 in possible_states[(t, i)]:
+            solver.add_clause([d2var(s, t, i-1), -svar(s, i, s2), -svar(t, i, s2)])
+
       # We encode: if there is a difference, then the outputs should
       # actually differ. (We do not have to encode the other implication!)
       # x_('d', s, t, i) /\ x_('o', s, i, o) => -x_('o', t, i, o)
