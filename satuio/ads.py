@@ -7,6 +7,11 @@ usage, please run
 
   python3 ads.py --help
 
+Note: it is not advised to construct an ADS for the whole machine
+in this way. The encoding takes a very long time, and the solver
+will have a hard time. Use the algorithm by Lee and Yannakakis
+instead (the ADS-problem for the whole state space is in P).
+
 © Joshua Moerman, Open Universiteit, 2022
 """
 
@@ -47,7 +52,7 @@ parser.add_argument('--states', help='For which states to compute an ADS', nargs
 args = parser.parse_args()
 
 if args.states == None or len(args.states) <= 1:
-  raise ValueError('Should specify at leasta 2 states')
+  raise ValueError('Should specify at least 2 states')
 
 # reading the automaton
 (alphabet, outputs, all_states, delta, labda) = read_machine(args.filename)
@@ -172,7 +177,9 @@ for s in tqdm(states, desc="CNF diffs"):
   for t in states:
     # We skip s == t, since those state are equivalent.
     # I am not sure whether we can skip s <= t, since our construction
-    # below is not symmetrical.
+    # below is not symmetrical. We do however include a clause which
+    # states that the dvars are symmetrical. This should help the
+    # solver a little bit.
     if s == t:
       continue
 
@@ -319,7 +326,16 @@ measure_time("Done with total time")
 
 # TODO: we know that dvar(s, t, i) is an equivalence relation for
 # each i. Do we help the solver when asserting that? Or will that
-# make the solving slower?
+# make the solving slower? One problem: transitivity requires n^3
+# many clauses... (Symmetry is already implemented.)
+
+# TODO: try to see whether the other implication of d2var -> d2var
+# makes the solving more efficient. The clauses are redundant, but
+# it might help. It also makes sure that enumerating several models
+# are actually different ADSs.
+
+# TODO: the same for difference -> dvar. We only do one implication,
+# and perhaps adding the other makes it faster.
 
 # TODO: prune the tree in the end. (Some states will have shorter
 # words than others.)
