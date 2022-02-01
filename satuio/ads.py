@@ -254,69 +254,148 @@ max_state_length = max([len(str) for str in states])
 solution = solver.solve()
 measure_time('Solver finished')
 
-if solution:
-  # We get the model, and store all true variables
-  # in a set, for easy lookup.
-  m = solver.get_model()
-  truth = set()
-  for l in m:
-    if l > 0:
-      truth.add(l)
+# If there is no solution, we can exit. As far as I know
+# there is no relevant information in the "core", as there
+# are no assumptions used in our encoding.
+if not solution:
+  console.print('! no ADS of length', length, style='bold red')
+  exit()
 
+# We get the model, and store all true variables
+# in a set, for easy lookup.
+m = solver.get_model()
+truth = set()
+for l in m:
+  if l > 0:
+    truth.add(l)
+
+# (If verbose) For each state, we print the paths and output.
+# We mark the differences red (there can be differences not
+# marked, these are the differences decided in the solving).
+if args.verbose:
   console.print('! words:')
+
+  # Print the words for each state. Note that these are
+  # also UIO sequenes for that state.
   for s in states:
     console.print(s.rjust(max_state_length, ' '), end=': ', style='bold black')
 
-    # We print the word
     for i in range(length):
       for a in alphabet:
         if avar(s, i, a) in truth:
           console.print(a, end=' ', style='bold green')
     console.print('')
 
-  # (If verbose) For each state, we print the paths and output.
-  # We mark the differences red (there can be differences not
-  # marked, these are the differences decided in the solving).
-  if args.verbose:
-    console.print('! paths')
-    for s in states:
-      console.print(s.rjust(max_state_length, ' '), end=': ', style='bold black')
+  # Print the complete path of each state
+  console.print('! paths')
+  for s in states:
+    console.print(s.rjust(max_state_length, ' '), end=': ', style='bold black')
+    for i in range(length):
+      for t in possible_states[(s, i)]:
+        if svar(s, i, t) in truth:
+          console.print(t, end=' ', style='blue')
+
+      for a in alphabet:
+        if avar(s, i, a) in truth:
+          console.print(a, end=' ', style='green')
+
+      for o in possible_outputs[(s, i)]:
+        if ovar(s, i, o) in truth:
+          console.print(o, end=' ', style='red')
+
+    console.print('')
+
+# Print even more debugging info (not recommended)
+if args.show_differences:
+  console.print('! differences')
+  for s in states:
+    for t in states:
+      console.print(s, 'vs', t, end=': ')
       for i in range(length):
-        for t in possible_states[(s, i)]:
-          if svar(s, i, t) in truth:
-            console.print(t, end=' ', style='blue')
+        if dvar(s, t, i) in truth:
+          console.print('X', end='')
+        else:
+          console.print('.', end='')
 
-        for a in alphabet:
-          if avar(s, i, a) in truth:
-            console.print(a, end=' ', style='green')
-
-        for o in possible_outputs[(s, i)]:
-          if ovar(s, i, o) in truth:
-            console.print(o, end=' ', style='red')
+        if d2var(s, t, i) in truth:
+          console.print('-', end=' ')
+        else:
+          console.print('_', end=' ')
 
       console.print('')
 
-  if args.show_differences:
-    console.print('! differences')
-    for s in states:
-      for t in states:
-        console.print(s, 'vs', t, end=': ')
-        for i in range(length):
-          if dvar(s, t, i) in truth:
-            console.print('X', end='')
-          else:
-            console.print('.', end='')
 
-          if d2var(s, t, i) in truth:
-            console.print('-', end=' ')
-          else:
-            console.print('_', end=' ')
+# Get some element from a set, doesn't matter which
+def some_elem(collection):
+  for x in collection:
+    return x
 
-        console.print('')
-else:
-  console.print('! no ADS of length', length, style='bold red')
-  # The core returned by the solver is not interesting:
-  # It is only the assumption (i.e. bvar).
+
+# Now we will extract the tree from the solution above.
+# The initial_set indicates which states we possibly started at,
+# and the level is the current depth of the tree.
+def extract_tree(initial_set, level):
+  global truth, possible_outputs
+
+  some_state = some_elem(initial_set)
+
+  # If there is only one state left, we can stop the tree here
+  if len(initial_set) == 1:
+    return { 'leaf': some_state }
+
+  # Get the (single) input which makes the split
+  split_symbol = some_elem([a for a in alphabet if avar(some_state, level, a) in truth])
+
+  # Collect the different outputs, put them in buckets
+  split_outputs = {}
+  for s in initial_set:
+    for o in possible_outputs[(s, level)]:
+      if ovar(s, level, o) in truth:
+        if o not in split_outputs:
+          split_outputs[o] = []
+        split_outputs[o].append(s)
+        break
+
+  # For each bucket, recursively create the tree
+  sub_trees = {}
+  for (o, xs) in split_outputs.items():
+    sub_trees[o] = extract_tree(xs, level + 1)
+
+  # Return a node
+  return { 'split_symbol': split_symbol, 'subtree': sub_trees }
+
+
+# Pretty (and compactly) printing the tree
+def print_tree(console, tree, left=''):
+  # The leaf is inlined in the printing
+  if 'leaf' in tree:
+    console.print('> state', end=' ')
+    console.print(tree['leaf'], style='bold blue')
+  else:
+    # The next input symbol is also inlined
+    console.print('> ', end='')
+    console.print(tree['split_symbol'], end='', style='bold green')
+    # We contract single-successor paths in the tree
+    while len(tree['subtree']) == 1:
+      tree = some_elem(tree['subtree'].values())
+      console.print(' - ', end='')
+      console.print(tree['split_symbol'], end='', style='bold green')
+    else:
+      console.print()
+      counter = len(tree['subtree'])
+      # Each possible output gets a new line, and we recurse
+      for (o, subtree) in tree['subtree'].items():
+        str_elm, str_pad = '├─ ', '│  '
+        counter -= 1
+        if counter == 0:
+          str_elm, str_pad = '└─ ', '   '
+        console.print(left, str_elm, end='', sep='')
+        console.print(o, end=' ', style='bold red')
+        print_tree(console, subtree, left + str_pad)
+
+
+# Output the full tree
+print_tree(console, extract_tree(states, 0))
 
 
 # Report some final stats
@@ -336,6 +415,3 @@ measure_time("Done with total time")
 
 # TODO: the same for difference -> dvar. We only do one implication,
 # and perhaps adding the other makes it faster.
-
-# TODO: prune the tree in the end. (Some states will have shorter
-# words than others.)
