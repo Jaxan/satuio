@@ -4,7 +4,7 @@ Script for finding UIO sequences in a Mealy machine. Uses SAT solvers
 but you can specify multiple (or all) states for which an UIO is
 desired. When an UIO (of specified length) does not exist, the solver
 returns UNSAT. For the usage, please run
-  
+
   python3 uio.py --help
 
 © Joshua Moerman, Open Universiteit, 2022
@@ -17,19 +17,10 @@ from pysat.card import CardEnc, EncType
 
 from argparse import ArgumentParser # Command line options
 from rich.console import Console    # Import colorized output
-from time import time               # Time for rough timing measurements
 from tqdm import tqdm               # Import fancy progress bars
 
-from parser import read_machine
-
-# function for some time logging
-start = time()
-start_total = start
-def measure_time(*str):
-  global start
-  now = time()
-  print('***', *str, "in %.3f seconds" % (now - start))
-  start = now
+from utils.parser import read_machine
+from utils.utils import *
 
 
 # *****************
@@ -40,7 +31,7 @@ def measure_time(*str):
 parser = ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
 parser.add_argument('length', help='Length of the UIO', type=int)
-parser.add_argument('-v', '--verbose', help="Show more output", action='store_true')
+parser.add_argument('-v', '--verbose', help='Show more output', action='store_true')
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--bases', help='For which states to compute an UIO (leave empty for all states)', nargs='*')
 args = parser.parse_args()
@@ -171,7 +162,7 @@ for s in tqdm(states, desc="CNF paths"):
           # x_('s', s, i, t) /\ x_('in', i, a) => x_('s', s, i+1, delta(t, a))
           # == -x_('s', s, i, t) \/ -x_('in', i, a) \/ x_('s', s, i+1, delta(t, a))
           solver.add_clause([-sv, -av, svar(s, i+1, next_t)])
-    
+
     # Only one output should be enabled
     unique([ovar(s, i, o) for o in possible_outputs[(s, i)]])
 
@@ -243,14 +234,9 @@ for base in bases:
   measure_time('Solver finished')
 
   if b:
-    # We get the model, and store all true variables
-    # in a set, for easy lookup.
-    m = solver.get_model()
-    truth = set()
-    for l in m:
-      if l > 0:
-        truth.add(l)
-    
+    # Get the set of true variables
+    truth = get_truth(solver)
+
     # We print the word
     console.print('! UIO of length', length, style='bold green')
     for i in range(length):
@@ -278,7 +264,7 @@ for base in bases:
                 style = 'bold green'
               elif evar(s, i) in truth:
                 style = 'bold red'
-              
+
               console.print(o, end=',  ', style=style)
         console.print('')
 
@@ -287,10 +273,9 @@ for base in bases:
     # The core returned by the solver is not interesting:
     # It is only the assumption (i.e. bvar).
 
+print('')
 
 # Report some final stats
-start = start_total
-print('')
-measure_time("Done with total time")
+measure_total_time('\nDone')
 print('With UIO:', num_uios[True])
 print('without: ', num_uios[False])

@@ -22,19 +22,10 @@ from pysat.card import CardEnc, EncType
 
 from argparse import ArgumentParser # Command line options
 from rich.console import Console    # Import colorized output
-from time import time               # Time for rough timing measurements
 from tqdm import tqdm               # Import fancy progress bars
 
-from parser import read_machine
-
-# function for some time logging
-start = time()
-start_total = start
-def measure_time(*str):
-  global start
-  now = time()
-  print('***', *str, "in %.3f seconds" % (now - start))
-  start = now
+from utils.parser import read_machine
+from utils.utils import *
 
 
 # *****************
@@ -45,8 +36,8 @@ def measure_time(*str):
 parser = ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
 parser.add_argument('length', help='Length of the ADS', type=int)
-parser.add_argument('-v', '--verbose', help="Show more output", action='store_true')
-parser.add_argument('--show-differences', help="Show even more output", action='store_true')
+parser.add_argument('-v', '--verbose', help='Show more output', action='store_true')
+parser.add_argument('--show-differences', help='Show even more output', action='store_true')
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--states', help='For which states to compute an ADS', nargs='+')
 args = parser.parse_args()
@@ -259,15 +250,11 @@ measure_time('Solver finished')
 # are no assumptions used in our encoding.
 if not solution:
   console.print('! no ADS of length', length, style='bold red')
+  measure_total_time('Done')
   exit()
 
-# We get the model, and store all true variables
-# in a set, for easy lookup.
-m = solver.get_model()
-truth = set()
-for l in m:
-  if l > 0:
-    truth.add(l)
+# Get the set of true variables
+truth = get_truth(solver)
 
 # (If verbose) For each state, we print the paths and output.
 # We mark the differences red (there can be differences not
@@ -325,12 +312,6 @@ if args.show_differences:
       console.print('')
 
 
-# Get some element from a set, doesn't matter which
-def some_elem(collection):
-  for x in collection:
-    return x
-
-
 # Now we will extract the tree from the solution above.
 # The initial_set indicates which states we possibly started at,
 # and the level is the current depth of the tree.
@@ -365,7 +346,8 @@ def extract_tree(initial_set, level):
   return { 'split_symbol': split_symbol, 'subtree': sub_trees }
 
 
-# Pretty (and compactly) printing the tree
+# Pretty (and compactly) printing the tree. As before, we color code
+# the output: green for inputs, red for outputs, and blue for states
 def print_tree(console, tree, left=''):
   # The leaf is inlined in the printing
   if 'leaf' in tree:
@@ -394,14 +376,13 @@ def print_tree(console, tree, left=''):
         print_tree(console, subtree, left + str_pad)
 
 
-# Output the full tree
+# Output the distinguishing tree
 print_tree(console, extract_tree(states, 0))
-
+print('')
 
 # Report some final stats
-start = start_total
-print('')
-measure_time("Done with total time")
+measure_total_time('Done')
+
 
 # TODO: we know that dvar(s, t, i) is an equivalence relation for
 # each i. Do we help the solver when asserting that? Or will that

@@ -22,22 +22,14 @@ from pysat.card import CardEnc, EncType
 
 from argparse import ArgumentParser # Command line options
 from rich.console import Console    # Import colorized output
-from time import time               # Time for rough timing measurements
 from tqdm import tqdm               # Import fancy progress bars
 
-from parser import read_machine
+from utils.parser import read_machine
+from utils.utils import *
+
 
 # We set up some things for nice output
 console = Console(markup=False, highlight=False)
-
-# function for some time logging
-start = time()
-start_total = start
-def measure_time(*str):
-  global start
-  now = time()
-  print('***', *str, "in %.3f seconds" % (now - start))
-  start = now
 
 
 # *****************
@@ -355,13 +347,8 @@ for length in range(2, bound + 1):
       if not b:
         continue
 
-      # We get the model, and store all true variables
-      # in a set, for easy lookup.
-      m = solver.get_model()
-      truth = set()
-      for l in m:
-        if l > 0:
-          truth.add(l)
+      # Get the set of true variables
+      truth = get_truth(solver)
 
       # We extract the word
       uio = []
@@ -381,9 +368,9 @@ for length in range(2, bound + 1):
 for (s, uio) in uios.items():
   console.print(s, style='bold black', end=' => ')
   console.print(uio, style='bold green')
+print('')
 
 # Report some final stats
-start = start_total
-measure_time("Done with total time")
+measure_total_time('\nDone')
 print('With UIO:', len(uios))
 print('without: ', len(states) - len(uios))
