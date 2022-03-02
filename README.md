@@ -41,6 +41,9 @@ python3 satuio/uio-incr.py --help
 
 # Finding an ADS in a Mealy machine for a set of states
 python3 satuio/ads.py --help
+
+# Returning an unsat core in the case an ADS does not exist
+python3 satuio/ads-core.py --help
 ```
 
 The solver can be specified (as long as pysat supports it). The default is
