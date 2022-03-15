@@ -24,6 +24,13 @@ def measure_total_time(*str):
   now = time()
   print('***', *str, ": total time = %.3f seconds" % (now - start_total))
 
+def time_since_start():
+  return time() - start_total
+
+def now():
+  t = time_since_start()
+  return f"[yellow]{t:6.2f}[/yellow]"
+
 
 # ****************************
 # Functions related to solving

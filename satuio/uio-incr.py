@@ -29,7 +29,7 @@ from utils.utils import *
 
 
 # We set up some things for nice output
-console = Console(markup=False, highlight=False)
+console = Console(highlight=False)
 
 
 # *****************
@@ -39,7 +39,8 @@ console = Console(markup=False, highlight=False)
 # command line options
 parser = ArgumentParser()
 parser.add_argument('filename', help='File of the mealy machine (dot format)')
-parser.add_argument('bound', help='Upper bound (incl.) for the UIO solving', type=int)
+parser.add_argument('--bound', help='Upper bound (incl.) for the UIO solving', type=int)
+parser.add_argument('--time', help='Upper bound on search time (ms)', type=int)
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--bases', help='For which states to compute an UIO (leave empty for all states)', nargs='*')
 args = parser.parse_args()
@@ -56,7 +57,7 @@ else:
 
 bound = args.bound
 
-measure_time('Constructed automaton with', len(states), 'states and', len(alphabet), 'symbols')
+console.print(now(), f'Constructed automaton with [bold blue]{len(states)} states[/bold blue] and [bold green]{len(alphabet)} symbols[/bold green]')
 
 
 # ****************
@@ -161,7 +162,7 @@ def extend(new_uios):
 extend(new_uios)
 new_uios = {}
 
-measure_time('Found', len(uios), 'simple uios already')
+console.print(now(), f'Found [bold green]{len(uios)} simple uios[/bold green] already')
 
 
 # ********************
@@ -169,14 +170,23 @@ measure_time('Found', len(uios), 'simple uios already')
 #  And the variables
 # ********************
 
-for length in range(2, bound + 1):
+length = 2
+while True:
+  # Check the given bounds
+  if args.bound and length > bound:
+    break
+  if args.time and time_since_start() * 1000 > args.time:
+    break
+
   # If there are no more states for which we want an UIO,
   # we stop the search.
   if not bases:
     break
 
+  new_uios = {}
+
   # Otherwise, we will setup a solver and search for them
-  print('*** Solving for length', length, 'for', len(bases), 'remaining states out of', len(states))
+  console.print(now(), f"> Solving for [bold red]length {length}[/bold red] for[bold blue] {len(bases)} states[/bold blue]")
   with Solver(name=args.solver) as solver:
     # Since the solver can only deal with variables x_i, we need
     # a mapping of variabeles: x_whatever  ->  x_i.
@@ -244,7 +254,7 @@ for length in range(2, bound + 1):
     # and we also record the outputs along this path. The outputs are later
     # used to decide whether we found a different output.
     possible_outputs = {}
-    for s in tqdm(states, desc="CNF paths"):
+    for s in tqdm(states, desc="CNF paths", leave=False):
       # current set of possible states we're in
       current_set = set([s])
       # set of successors for the next iteration of i
@@ -296,7 +306,7 @@ for length in range(2, bound + 1):
     # Also note, we only encode the converse: if there is a difference claimed
     # and base has a certain output, than the state should not have that output.
     # This means that the solver doesn't report all differences, but at least one.
-    for s in tqdm(states, desc="CNF diffs"):
+    for s in tqdm(states, desc="CNF diffs", leave=False):
       # Constraint: there is a place, such that there is a difference in output
       # \/_i x_('e', s, i)
       # If s is our base, we don't care (this can be done, because only
@@ -326,19 +336,21 @@ for length in range(2, bound + 1):
             if o in outputs_s:
               solver.add_clause([-bv, -evar(s, i), -ovar(base, i, o), -ovar(s, i, o)])
 
-    measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver.nof_vars(), 'variables, solving with', args.solver)
+    console.print(now(), f'  > Constructed CNF with {solver.nof_clauses()} clauses and {solver.nof_vars()} variables, solving with {args.solver}')
 
 
     # ******************
     # Solving and output
     # ******************
 
-    new_uios = {}
-
     # We want to find an UIO for each base. We have already constructed
     # the CNF. So it remains to add assumptions to the solver, this is
     # called "incremental solving" in SAT literature.
-    for base in tqdm(bases, desc='solving'):
+    for base in tqdm(bases, desc='solving', leave=False):
+      # If we run out of time, stop solving (but finish other stuff)
+      if args.time and time_since_start() * 1000 > args.time:
+        break
+
       # Solve with bvar(base) being true
       b = solver.solve(assumptions=[bvar(base)])
 
@@ -359,18 +371,27 @@ for length in range(2, bound + 1):
 
       new_uios[base] = uio
 
-    print('found', len(new_uios), 'new uios, total =', len(new_uios) + len(uios))
-    extend(new_uios)
-    measure_time('after extending, we have', len(uios), 'uios')
-    new_uios = {}
+  # Getting some stats
+  new_count = len(new_uios)
+  curr_count = len(uios)
+
+  # Extend with uio implication graph
+  extend(new_uios)
+  new_uios = {}
+
+  # Print statistics
+  tot_count = len(uios)
+  console.print(now(), f'  > found {new_count} new uios, {tot_count - curr_count - new_count} extended, [bold green]total = {tot_count}[/bold green]')
+
+  length = length + 1
 
 
 for (s, uio) in uios.items():
   console.print(s, style='bold black', end=' => ')
   console.print(uio, style='bold green')
-print('')
+console.print('')
 
 # Report some final stats
 measure_total_time('\nDone')
-print('With UIO:', len(uios))
-print('without: ', len(states) - len(uios))
+console.print(f'uios found: {100*len(uios)/len(states):.0f}')
+console.print(f'avg length: {sum([len(uio) for uio in uios.values()])/len(uios):.3}')
