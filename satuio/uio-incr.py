@@ -43,6 +43,7 @@ parser.add_argument('--bound', help='Upper bound (incl.) for the UIO solving', t
 parser.add_argument('--time', help='Upper bound on search time (ms)', type=int)
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--bases', help='For which states to compute an UIO (leave empty for all states)', nargs='*')
+parser.add_argument('--log', help='Enable the additional log file', action='store_true')
 args = parser.parse_args()
 
 # reading the automaton
@@ -393,5 +394,9 @@ console.print('')
 
 # Report some final stats
 measure_total_time('\nDone')
-console.print(f'uios found: {100*len(uios)/len(states):.0f}')
+console.print(f'uios found: {100*len(uios)/len(states):.0f}%')
 console.print(f'avg length: {sum([len(uio) for uio in uios.values()])/len(uios):.3}')
+
+if args.log:
+  with open('uio.log', 'a') as logfile:
+    logfile.write(f'{args.filename},{len(states)},{len(uios)},{sum([len(uio) for uio in uios.values()])}\n')

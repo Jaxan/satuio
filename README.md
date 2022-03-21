@@ -17,7 +17,7 @@ This project uses Python3. It uses the following packages which can be
 installed with `pip` as follows:
 
 ```bash
-pip3 install pysat tqdm rich
+pip3 install python-sat tqdm rich
 ```
 
 * [`pysat`](https://github.com/pysathq/pysat)
