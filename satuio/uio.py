@@ -23,6 +23,10 @@ from utils.parser import read_machine
 from utils.utils import *
 
 
+# We set up some things for nice output
+console = Console(highlight=False)
+
+
 # *****************
 # Reading the input
 # *****************
@@ -47,7 +51,7 @@ else:
 
 length = args.length
 
-measure_time('Constructed automaton with', len(states), 'states and', len(alphabet), 'symbols')
+console.print(now(), f'Constructed automaton with {len(states)} states and {len(alphabet)} symbols')
 
 
 # ********************
@@ -104,7 +108,7 @@ def unique(lits):
   cnf = CardEnc.equals(lits, 1, vpool=vpool, encoding=EncType.seqcounter)
   solver.append_formula(cnf.clauses)
 
-measure_time('Setup solver', args.solver)
+console.print(now(), 'Setup solver', args.solver)
 
 
 # ********************
@@ -125,7 +129,7 @@ unique([bvar(base) for base in bases])
 # and we also record the outputs along this path. The outputs are later
 # used to decide whether we found a different output.
 possible_outputs = {}
-for s in tqdm(states, desc="CNF paths"):
+for s in tqdm(states, desc="CNF paths", leave=args.verbose):
   # current set of possible states we're in
   current_set = set([s])
   # set of successors for the next iteration of i
@@ -177,7 +181,7 @@ for s in tqdm(states, desc="CNF paths"):
 # Also note, we only encode the converse: if there is a difference claimed
 # and base has a certain output, than the state should not have that output.
 # This means that the solver doesn't report all differences, but at least one.
-for s in tqdm(states, desc="CNF diffs"):
+for s in tqdm(states, desc="CNF diffs", leave=args.verbose):
   # Constraint: there is a place, such that there is a difference in output
   # \/_i x_('e', s, i)
   # If s is our base, we don't care (this can be done, because only
@@ -207,7 +211,7 @@ for s in tqdm(states, desc="CNF diffs"):
         if o in outputs_s:
           solver.add_clause([-bv, -evar(s, i), -ovar(base, i, o), -ovar(s, i, o)])
 
-measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver.nof_vars(), 'variables')
+console.print(now(), f'Constructed CNF with {solver.nof_clauses()} clauses and {solver.nof_vars()} variables')
 
 
 # ******************
@@ -215,7 +219,6 @@ measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver
 # ******************
 
 # We set up some things for nice output
-console = Console(markup=False, highlight=False)
 max_state_length = max([len(str) for str in states])
 
 # We count the number of uios
@@ -225,20 +228,17 @@ num_uios = {True: 0, False: 0}
 # the CNF. So it remains to add assumptions to the solver, this is
 # called "incremental solving" in SAT literature.
 for base in bases:
-  console.print('')
-  console.print('*** UIO for state', base, style='bold blue')
-
   # Solve with bvar(base) being true
   b = solver.solve(assumptions=[bvar(base)])
   num_uios[b] = num_uios[b] + 1
-  measure_time('Solver finished')
+  console.print(now(), f'Solved for [bold blue]{base}[/bold blue]')
 
   if b:
     # Get the set of true variables
     truth = get_truth(solver)
 
     # We print the word
-    console.print('! UIO of length', length, style='bold green')
+    console.print(f'       UIO of length {length}: ', end='')
     for i in range(length):
       for a in alphabet:
         if avar(i, a) in truth:
@@ -269,13 +269,13 @@ for base in bases:
         console.print('')
 
   else:
-    console.print('! no UIO of length', length, style='bold red')
+    console.print(f'       no UIO of length {length}', style='bold red')
     # The core returned by the solver is not interesting:
     # It is only the assumption (i.e. bvar).
 
 print('')
 
 # Report some final stats
-measure_total_time('\nDone')
-print('With UIO:', num_uios[True])
-print('without: ', num_uios[False])
+console.print(now(), 'Done')
+console.print('With UIO:', num_uios[True])
+console.print('without: ', num_uios[False])

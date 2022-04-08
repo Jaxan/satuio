@@ -26,6 +26,11 @@ from tqdm import tqdm               # Import fancy progress bars
 
 from utils.parser import read_machine
 from utils.utils import *
+import random
+
+
+# We set up some things for nice output
+console = Console(highlight=False)
 
 
 # *****************
@@ -38,19 +43,25 @@ parser.add_argument('filename', help='File of the mealy machine (dot format)')
 parser.add_argument('length', help='Length of the ADS', type=int)
 parser.add_argument('-v', '--verbose', help='Show more output', action='store_true')
 parser.add_argument('--show-differences', help='Show even more output', action='store_true')
+parser.add_argument('--random-base', help='Chooses a random base', action='store_true')
+parser.add_argument('--base-size', type=int)
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--states', help='For which states to compute an ADS', nargs='+')
 args = parser.parse_args()
-
-if args.states == None or len(args.states) <= 1:
-  raise ValueError('Should specify at least 2 states')
 
 # reading the automaton
 (alphabet, outputs, all_states, delta, labda) = read_machine(args.filename)
 states = args.states
 length = args.length
 
-measure_time('Constructed automaton with', len(all_states), 'states and', len(alphabet), 'symbols')
+if args.random_base and args.base_size > 1:
+  states = random.sample(all_states, k=args.base_size)
+elif len(args.states) > 1:
+  states = args.states
+else:
+  raise ValueError('Should specify at least 2 states')
+
+console.print(now(), f'Constructed automaton with [bold blue]{len(all_states)} states[/bold blue], [bold green]{len(alphabet)} symbols[/bold green] and Q_0 has [bold blue]{len(states)} states[/bold blue]')
 
 
 # ********************
@@ -102,7 +113,7 @@ def unique(lits):
   cnf = CardEnc.equals(lits, 1, vpool=vpool, encoding=EncType.seqcounter)
   solver.append_formula(cnf.clauses)
 
-measure_time('Setup solver', args.solver)
+console.print(now(), f'Solver {args.solver} ready for clauses')
 
 
 # ********************
@@ -116,7 +127,7 @@ measure_time('Setup solver', args.solver)
 # used to decide whether we found a different output.
 possible_outputs = {}
 possible_states = {}
-for s in tqdm(states, desc="CNF paths"):
+for s in tqdm(states, desc="CNF paths", leave=False):
   # current set of possible states we're in
   current_set = set([s])
   # set of successors for the next iteration of i
@@ -164,7 +175,7 @@ for s in tqdm(states, desc="CNF paths"):
 
 # Now we will encode differences in outputs (and equal inputs, as
 # long as there is no difference).
-for s in tqdm(states, desc="CNF diffs"):
+for s in tqdm(states, desc="CNF diffs", leave=False):
   for t in states:
     # We skip s == t, since those state are equivalent.
     # I am not sure whether we can skip s <= t, since our construction
@@ -230,7 +241,7 @@ for s in tqdm(states, desc="CNF diffs"):
           solver.add_clause([-dvar(s, t, i), -ovar(s, i, o), -ovar(t, i, o)])
 
 
-measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver.nof_vars(), 'variables')
+console.print(now(), f'Constructed CNF with {solver.nof_clauses()} clauses and {solver.nof_vars()} variables')
 
 
 # ******************
@@ -238,19 +249,18 @@ measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver
 # ******************
 
 # We set up some things for nice output
-console = Console(markup=False, highlight=False)
 max_state_length = max([len(str) for str in states])
 
 # Solve it!
 solution = solver.solve()
-measure_time('Solver finished')
+console.print(now(), 'Solver finished')
 
 # If there is no solution, we can exit. As far as I know
 # there is no relevant information in the "core", as there
 # are no assumptions used in our encoding.
 if not solution:
   console.print('! no ADS of length', length, style='bold red')
-  measure_total_time('Done')
+  console.print(now(), 'Done')
   exit()
 
 # Get the set of true variables
@@ -351,17 +361,14 @@ def extract_tree(initial_set, level):
 def print_tree(console, tree, left=''):
   # The leaf is inlined in the printing
   if 'leaf' in tree:
-    console.print('> state', end=' ')
-    console.print(tree['leaf'], style='bold blue')
+    console.print(f'> state [bold blue]{tree["leaf"]}[/bold blue]')
   else:
     # The next input symbol is also inlined
-    console.print('> ', end='')
-    console.print(tree['split_symbol'], end='', style='bold green')
+    console.print(f'> [bold green]{tree["split_symbol"]}[/bold green]', end='')
     # We contract single-successor paths in the tree
     while len(tree['subtree']) == 1:
       tree = some_elem(tree['subtree'].values())
-      console.print(' - ', end='')
-      console.print(tree['split_symbol'], end='', style='bold green')
+      console.print(f' - [bold green]{tree["split_symbol"]}[/bold green]', end='')
     else:
       console.print()
       counter = len(tree['subtree'])
@@ -381,7 +388,7 @@ print_tree(console, extract_tree(states, 0))
 print('')
 
 # Report some final stats
-measure_total_time('Done')
+console.print(now(), 'Done')
 
 
 # TODO: we know that dvar(s, t, i) is an equivalence relation for

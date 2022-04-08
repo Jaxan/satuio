@@ -44,6 +44,7 @@ parser.add_argument('--time', help='Upper bound on search time (ms)', type=int)
 parser.add_argument('--solver', help='Which solver to use (default g3)', default='g3')
 parser.add_argument('--bases', help='For which states to compute an UIO (leave empty for all states)', nargs='*')
 parser.add_argument('--log', help='Enable the additional log file', action='store_true')
+parser.add_argument('-v', '--verbose', help='Show more output', action='store_true')
 args = parser.parse_args()
 
 # reading the automaton
@@ -255,7 +256,7 @@ while True:
     # and we also record the outputs along this path. The outputs are later
     # used to decide whether we found a different output.
     possible_outputs = {}
-    for s in tqdm(states, desc="CNF paths", leave=False):
+    for s in tqdm(states, desc="CNF paths", leave=args.verbose):
       # current set of possible states we're in
       current_set = set([s])
       # set of successors for the next iteration of i
@@ -307,7 +308,7 @@ while True:
     # Also note, we only encode the converse: if there is a difference claimed
     # and base has a certain output, than the state should not have that output.
     # This means that the solver doesn't report all differences, but at least one.
-    for s in tqdm(states, desc="CNF diffs", leave=False):
+    for s in tqdm(states, desc="CNF diffs", leave=args.verbose):
       # Constraint: there is a place, such that there is a difference in output
       # \/_i x_('e', s, i)
       # If s is our base, we don't care (this can be done, because only
@@ -347,7 +348,7 @@ while True:
     # We want to find an UIO for each base. We have already constructed
     # the CNF. So it remains to add assumptions to the solver, this is
     # called "incremental solving" in SAT literature.
-    for base in tqdm(bases, desc='solving', leave=False):
+    for base in tqdm(bases, desc='solving', leave=args.verbose):
       # If we run out of time, stop solving (but finish other stuff)
       if args.time and time_since_start() * 1000 > args.time:
         break
@@ -393,7 +394,7 @@ for (s, uio) in uios.items():
 console.print('')
 
 # Report some final stats
-measure_total_time('\nDone')
+console.print(now(), 'Done')
 console.print(f'uios found: {100*len(uios)/len(states):.0f}%')
 console.print(f'avg length: {sum([len(uio) for uio in uios.values()])/len(uios):.3}')
 

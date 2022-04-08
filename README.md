@@ -48,7 +48,14 @@ python3 satuio/ads-core.py --help
 
 The solver can be specified (as long as pysat supports it). The default is
 [Glucose3](https://www.labri.fr/perso/lsimon/glucose/), as that worked
-well on the examples.
+well on the examples. After a bit more testing, these work well: `g3`, `mc`,
+`m22`. These are okay: `gc3`, `gc4`, `g4`, `mgh`. And these were slow for me:
+`cd`, `lgl`, `mcb`, `mcm`, `mpl`, `mg3`.
+
+The encoding currectly defaults to `seqcounter` for cardinality constraints.
+This seems to work just fine, and I am not even sure the encodings are really
+different for cardinality of `k=1`. It could be worth doing more testing to
+see which is the fastest.
 
 
 ## Copyright

@@ -1,7 +1,8 @@
 """
 WIP script for returning the unsat core in the case an ADS does
 *not* exist. This could be merged into the main ads script,
-although there is an additional cost (presumably). Usage:
+although there is an additional cost (presumably). For now, this
+is mostyl copy-pasted from ads.py. Usage:
 
   python3 ads-core.py --help
 
@@ -19,6 +20,10 @@ from tqdm import tqdm               # Import fancy progress bars
 
 from utils.parser import read_machine
 from utils.utils import *
+
+
+# We set up some things for nice output
+console = Console(highlight=False)
 
 
 # *****************
@@ -41,7 +46,7 @@ if args.states == None or len(args.states) <= 1:
 states = args.states
 length = args.length
 
-measure_time('Constructed automaton with', len(all_states), 'states and', len(alphabet), 'symbols')
+console.print(now(), f'Constructed automaton with [bold blue]{len(all_states)} states[/bold blue], [bold green]{len(alphabet)} symbols[/bold green] and Q_0 has [bold blue]{len(states)} states[/bold blue]')
 
 
 # ********************
@@ -100,7 +105,7 @@ def unique(lits):
   cnf = CardEnc.equals(lits, 1, vpool=vpool, encoding=EncType.seqcounter)
   solver.append_formula(cnf.clauses)
 
-measure_time('Setup solver', args.solver)
+console.print(now(), f'Solver {args.solver} ready for clauses')
 
 
 # ********************
@@ -114,7 +119,7 @@ measure_time('Setup solver', args.solver)
 # used to decide whether we found a different output.
 possible_outputs = {}
 possible_states = {}
-for s in tqdm(states, desc="CNF paths"):
+for s in tqdm(states, desc="CNF paths", leave=False):
   # current set of possible states we're in
   current_set = set([s])
   # set of successors for the next iteration of i
@@ -162,7 +167,7 @@ for s in tqdm(states, desc="CNF paths"):
 
 # Now we will encode differences in outputs (and equal inputs, as
 # long as there is no difference).
-for s in tqdm(states, desc="CNF diffs"):
+for s in tqdm(states, desc="CNF diffs", leave=False):
   for t in states:
     # We skip s == t, since those state are equivalent.
     # I am not sure whether we can skip s <= t, since our construction
@@ -231,7 +236,7 @@ for s in tqdm(states, desc="CNF diffs"):
           solver.add_clause(enable_for_core + [-dvar(s, t, i), -ovar(s, i, o), -ovar(t, i, o)])
 
 
-measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver.nof_vars(), 'variables')
+console.print(now(), f'Constructed CNF with {solver.nof_clauses()} clauses and {solver.nof_vars()} variables')
 
 
 # ******************
@@ -239,7 +244,6 @@ measure_time('Constructed CNF with', solver.nof_clauses(), 'clauses and', solver
 # ******************
 
 # We set up some things for nice output
-console = Console(markup=False, highlight=False)
 max_state_length = max([len(str) for str in states])
 
 # Solve it!
@@ -249,17 +253,17 @@ solution = False
 while current_states and not solution:
   enabled_states = [evar(s) for s in current_states]
   solution = solver.solve(assumptions=enabled_states)
-  measure_time('Solver finished')
+  console.print(now(), 'Solver finished')
 
   # If there is no solution, we can exit. As far as I know
   # there is no relevant information in the "core", as there
   # are no assumptions used in our encoding.
   if solution:
-    console.print('! ADS of length', length, 'for', len(current_states), 'states exists', style='bold green')
-    measure_total_time('Done')
+    console.print(f'! ADS of length {length} for {len(current_states)} states exists', style='bold green')
+    console.print(now(), 'Done')
     exit()
 
-  console.print('! no ADS of length', length, 'for', len(current_states), 'states', style='bold red')
+  console.print(f'! no ADS of length {length} for {len(current_states)} states', style='bold red')
 
   core = solver.get_core()
   core_set = set()
@@ -269,11 +273,11 @@ while current_states and not solution:
 
   core_states = [s for s in states if evar(s) in core_set]
   fine_states = [s for s in states if evar(s) not in core_set]
-  print(len(core_states), 'states in the unsat core')
-  print('core states =', core_states)
-  print('fine states =', fine_states)
+  console.print(f'{len(core_states)} states in the unsat core')
+  console.print(f'core states = {core_states}')
+  console.print(f'fine states = {fine_states}')
 
   current_states = fine_states
 
 
-measure_total_time('Done')
+console.print(now(), 'Done')

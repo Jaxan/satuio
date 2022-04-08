@@ -13,17 +13,6 @@ from time import time
 start = time()
 start_total = start
 
-def measure_time(*str):
-  global start
-  now = time()
-  print('***', *str, "in %.3f seconds" % (now - start))
-  start = now
-
-def measure_total_time(*str):
-  global start_total
-  now = time()
-  print('***', *str, ": total time = %.3f seconds" % (now - start_total))
-
 def time_since_start():
   return time() - start_total
 
