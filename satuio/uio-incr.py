@@ -29,7 +29,7 @@ from utils.utils import *
 
 
 # We set up some things for nice output
-console = Console(highlight=False)
+console = Console(highlight=False, stderr=True)
 
 
 # *****************
@@ -397,6 +397,8 @@ console.print('')
 console.print(now(), 'Done')
 console.print(f'uios found: {100*len(uios)/len(states):.0f}%')
 console.print(f'avg length: {sum([len(uio) for uio in uios.values()])/len(uios):.3}')
+
+print(f'{args.filename},{len(states)},{len(uios)},{sum([len(uio) for uio in uios.values()])}')
 
 if args.log:
   with open('uio.log', 'a') as logfile:
